@@ -1,0 +1,8 @@
+/.env
+/Venv
+/__pycache__
+/_project
+/app-bup.py
+/doc_summaries.json
+/summaries.txt
+/tree.txt
