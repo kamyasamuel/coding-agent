@@ -26,6 +26,15 @@ class CodingAgent:
         if not self.groq_client.api_key:
             self.logger.warning("No Groq API key provided or found in .env file.")
 
+        # Rich console for pretty logs
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
+            self.console = Console()
+        except ImportError:
+            self.console = None
+
     def read_package_docs(self, package_path: Optional[Path] = None) -> None:
         """
         Read Python package documentation and summarize key information.
@@ -34,12 +43,19 @@ class CodingAgent:
         package_path = package_path or self.base_path
         package_path = Path(package_path)
 
+        if self.console:
+            self.console.print(f"[bold cyan]Reading and summarizing documentation in:[/] {package_path}")
+
         for root, _, files in os.walk(package_path):
             for file in files:
                 file_path = Path(root) / file
                 if file.endswith('.py'):
+                    if self.console:
+                        self.console.print(f"[green]Summarizing Python file:[/] {file_path}")
                     self._summarize_python_file(file_path)
                 elif file.lower() in ('readme.md', 'readme.rst', 'readme.txt'):
+                    if self.console:
+                        self.console.print(f"[yellow]Summarizing README:[/] {file_path}")
                     self._summarize_readme(file_path)
 
     def _summarize_python_file(self, file_path: Path) -> None:
@@ -94,7 +110,11 @@ class CodingAgent:
         """
         base_path = base_path or self.base_path
         base_path = Path(base_path)
+        if self.console:
+            self.console.print(f"[bold cyan]Generating directory tree for:[/] {base_path}")
         self.directory_tree = self._build_tree(base_path)
+        if self.console:
+            self.console.print(f"[green]Directory tree generated.[/]")
         return self.directory_tree
 
     def _build_tree(self, path: Path) -> Dict:
@@ -116,9 +136,13 @@ class CodingAgent:
             self.logger.warning("Directory tree is empty. Run generate_directory_tree first.")
             return
 
+        if self.console:
+            self.console.print("[bold cyan]Pretty printing directory tree...[/]")
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 print(self.pp.pformat(self.directory_tree), file=f)
+            if self.console:
+                self.console.print(f"[green]Directory tree saved to:[/] {output_file}")
         else:
             self.pp.pprint(self.directory_tree)
 
@@ -128,9 +152,13 @@ class CodingAgent:
             self.logger.warning("Documentation summaries are empty. Run read_package_docs first.")
             return
 
+        if self.console:
+            self.console.print("[bold cyan]Pretty printing documentation summaries...[/]")
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 print(self.pp.pformat(self.doc_summaries), file=f)
+            if self.console:
+                self.console.print(f"[green]Documentation summaries saved to:[/] {output_file}")
         else:
             self.pp.pprint(self.doc_summaries)
 
@@ -138,21 +166,23 @@ class CodingAgent:
         """Save documentation summaries to a JSON file."""
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.doc_summaries, f, indent=2)
+        if self.console:
+            self.console.print(f"[green]Summaries saved to:[/] {output_path}")
 
-    def generate_code_with_groq(self, prompt: str, max_tokens: int = 500) -> str:
+    def generate_code_with_groq(self, prompt: str) -> str:
         """
         Generate code using the Groq API based on a user prompt.
         Returns the generated code as a string.
         """
         try:
             response = self.groq_client.chat.completions.create(
-                model="mixtral-8x7b-32768",  # Example model, adjust as needed
+                model="llama3-70b-8192",  # Example model, adjust as needed
                 messages=[
-                    {"role": "system", "content": "You are a Python code generator. Provide clean, well-documented Python code."},
+                    {"role": "system", "content": "You are a Python code generator. Provide clean, well-documented ready to run Python code without further debugging."},
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=max_tokens,
-                temperature=0.7
+                temperature=0,
+                
             )
             content = response.choices[0].message.content
             return content.strip() if content else ""
@@ -166,40 +196,84 @@ class CodingAgent:
         Optionally use Groq API to generate file content.
         """
         path_obj = Path(project_path)
+        if self.console:
+            self.console.print(f"[bold cyan]Creating project directory at:[/] {project_path}")
         path_obj.mkdir(exist_ok=True)
         self._create_directory_structure(path_obj, structure, use_groq)
+        if self.console:
+            self.console.print(f"[green]Project directory created at:[/] {project_path}")
 
     def _create_directory_structure(self, base_path: Path, structure: Dict, use_groq: bool) -> None:
         """Recursively create directories and files from the structure."""
         for item in structure.get('children', []):
             item_path = base_path / item['name']
             if item['type'] == 'dir':
+                if self.console:
+                    self.console.print(f"[cyan]Creating directory:[/] {item_path}")
                 item_path.mkdir(exist_ok=True)
                 self._create_directory_structure(item_path, item, use_groq)
             elif item['type'] == 'file':
                 content = item.get('content', '')
                 if use_groq and not content:  # Generate content with Groq if not provided
                     prompt = f"Generate a Python file named {item['name']} for a {structure['name']} project."
+                    if self.console:
+                        self.console.print(f"[yellow]Generating content for file:[/] {item_path}")
                     content = self.generate_code_with_groq(prompt)
                 with open(item_path, 'w', encoding='utf-8') as f:
                     f.write(content)
+                if self.console:
+                    self.console.print(f"[green]Created file:[/] {item_path}")
 
-    def design_project_template(self, project_type: str = 'basic', use_groq: bool = False) -> Dict:
+    def design_project_template(self, project_type: str = 'basic', use_groq: bool = True, prompt: str = '') -> Dict:
         """
         Design a project directory structure based on a template type.
-        Optionally use Groq to generate file content.
+        If use_groq is True, use the LLM to generate a detailed project template from a prompt.
+        Otherwise, use a static template.
         """
+        logging.info(prompt)
+        if use_groq:
+            if not prompt:
+                prompt = (
+                    f"Design a detailed Python project directory structure for a '{project_type}' project. "
+                    "Return the structure as a JSON object with keys: 'name' (project root), 'children' (list of files and folders), "
+                    "where each child is a dict with 'name', 'type' ('file' or 'dir'), and for directories, a 'children' list. "
+                    "For files, optionally include a 'content' key with a short code or description. "
+                    "Example: {\"name\": \"project\", \"children\": [{\"name\": \"src\", ...}]}"
+                )
+            if self.console:
+                self.console.print(f"[bold cyan]Requesting LLM to design a project template for type:[/] {project_type}")
+            try:
+                response = self.generate_code_with_groq(prompt)
+                print(response)
+                import json as _json
+                # Try to extract the first JSON object from the response
+                start = response.find('{')
+                end = response.rfind('}') + 1
+                if start != -1 and end != -1:
+                    json_str = response[start:end]
+                    if self.console:
+                        self.console.print("[green]LLM project template received and parsed.[/]")
+                    return _json.loads(json_str)
+                # fallback: try to parse the whole response
+                if self.console:
+                    self.console.print("[yellow]Trying to parse full LLM response as JSON...[/]")
+                return _json.loads(response)
+            except Exception as e:
+                if self.console:
+                    self.console.print(f"[red]Failed to parse LLM project template: {e}[/]")
+                self.logger.error(f"Failed to parse LLM project template: {e}")
+                # fallback to static template
         templates = {
             'basic': {
                 'name': 'project',
                 'children': [
                     {'name': 'src', 'type': 'dir', 'children': [
                         {'name': '__init__.py', 'type': 'file', 'content': '# Package init'},
-                        {'name': 'main.py', 'type': 'file', 'content': '' if use_groq else 'def main():\n    pass\n\nif __name__ == "__main__":\n    main()'}
+                        {'name': 'main.py', 'type': 'file', 'content': 'def main():\n    pass\n\nif __name__ == "__main__":\n    main()'}
                     ]},
                     {'name': 'tests', 'type': 'dir', 'children': [
                         {'name': '__init__.py', 'type': 'file', 'content': ''},
-                        {'name': 'test_main.py', 'type': 'file', 'content': '' if use_groq else 'import pytest\n'}
+                        {'name': 'test_main.py', 'type': 'file', 'content': 'import pytest\n'}
                     ]},
                     {'name': 'README.md', 'type': 'file', 'content': '# Project\nA basic Python project.'},
                     {'name': 'requirements.txt', 'type': 'file', 'content': ''}
@@ -207,3 +281,4 @@ class CodingAgent:
             }
         }
         return templates.get(project_type, templates['basic'])
+

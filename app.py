@@ -1,3 +1,4 @@
+
 import os
 from dotenv import load_dotenv
 from groq import Groq
@@ -7,16 +8,18 @@ from rich.panel import Panel
 from rich.text import Text
 import asyncio
 
+# Always load .env from the project root
+from pathlib import Path
+dotenv_path = Path(__file__).parent / '.env'
+print(f"Loading .env from: {dotenv_path}")
+load_dotenv(dotenv_path=dotenv_path)
+
 class GroqInference:
     """A class to handle Groq API inference with streaming and colored output."""
 
     def __init__(self, model="llama3-70b-8192", temperature=0.7, max_tokens=500):
         """Initialize the Groq client with environment variables and model settings."""
-        load_dotenv()  # Load environment variables from .env file
         self.api_key = os.getenv("GROQ_API_KEY")
-        if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in .env file")
-
         self.client = Groq(api_key=self.api_key)
         self.model = model
         self.temperature = temperature

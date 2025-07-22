@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--create_project', type=str, help='Create a project directory at the given path')
     parser.add_argument('--project_type', type=str, default='basic', help='Project template type')
     parser.add_argument('--use_groq', action='store_true', help='Use Groq to generate code content')
+    parser.add_argument('--prompt', type=str, default='', help='Prompt for Groq to generate project')
 
     args = parser.parse_args()
 
@@ -40,7 +41,7 @@ def main():
         agent.save_summaries(args.save_summaries)
 
     if args.create_project:
-        project_structure = agent.design_project_template(args.project_type, use_groq=args.use_groq)
+        project_structure = agent.design_project_template(args.project_type, use_groq=True, prompt=args.prompt)
         agent.create_project_directory(args.create_project, project_structure, use_groq=args.use_groq)
 
 if __name__ == "__main__":
