@@ -1,24 +1,24 @@
-pip install groq python-dotenv rich
-groq-inference-project/
-groq = GroqInference(model="llama3-70b-8192", temperature=0.5, max_tokens=200)
+# Agentic python project launcher
 
-# Groq API Streaming Inference
-
-Interact with the Groq API using Python, featuring real-time streaming responses and rich, colored console output. Environment variables are securely loaded from a `.env` file.
+Launch an entire python project app automatically using agentic AI flow.
 
 ## Features
-- **Streaming Inference**: Real-time response streaming from Groq API.
+- **Agentic AI orchestration**: AI aided planning, scripting and refinement.
 - **Rich Console Output**: User prompts in blue, responses in green, errors in red.
 - **Environment Variables**: Secure API key management via `.env`.
 - **Configurable**: Easily set model, temperature, and max tokens.
 
 ## Requirements
 - Python 3.8+
-- Groq API Key ([Get one from xAI](https://x.ai/api))
+- Groq API Key ([Get one from Groq](https://groq.com))
+- OpenAi API Key
+- Gemini API Key
+- Ollama for local inference
 - Dependencies:
   - `groq`
   - `python-dotenv`
   - `rich`
+  - `litellm`
 
 ## Installation
 1. **Clone the repository**:
@@ -44,25 +44,27 @@ Interact with the Groq API using Python, featuring real-time streaming responses
 
 ## Project Structure
 ```
-groq-inference-project/
+agentic-python-project-launcher/
 ├── .env            # Environment variables (not committed)
 ├── .gitignore      # Git ignore file
-├── app-bup.py      # Main script with GroqInference class
 ├── README.md       # This file
 ├── requirements.txt
-├── venv/           # Virtual environment
+├── venv/            # Virtual environment
+├── app.py           # Simple chat with pretty print
+├── main_engine.py   # Main agent cluster
+├── run_main_engine.py    # Agentic flow launcher
 └── __pycache__/
 ```
 
 ## Usage
 Run the script:
 ```bash
-python app-bup.py
+python app.py
 ```
 
 Example code:
 ```python
-from app-bup import GroqInference
+from app import GroqInference
 
 # Initialize the GroqInference class
 groq = GroqInference(model="llama3-70b-8192", temperature=0.5, max_tokens=200)
