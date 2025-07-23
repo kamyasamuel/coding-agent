@@ -254,3 +254,4 @@ class CodingAgent:
                         f.truncate()
                         if self.console:
                             self.console.print(f"[green]Successfully updated:[/] {file_path}")
+                            
