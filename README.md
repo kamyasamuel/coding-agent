@@ -117,3 +117,54 @@ Contributions are welcome! Please submit issues or pull requests. Update the REA
 
 ## License
 MIT License. See LICENSE for details.
+
+## Workflow for a 3-Agent System
+
+Here's a breakdown of a coherent workflow for a coding agent that manages three primary agents, including system and user prompts for each.
+
+**Agent 1: Project Structure and Directory Generating Agent**
+
+This agent is responsible for creating the foundational structure of a new project. It generates directories and placeholder script files. Crucially, it embeds instructions within these placeholder files, guiding a language model on the specific content to be generated for each file.
+
+**System Prompt:**
+
+"You are an expert software architect and project planner. Your task is to generate a complete and logical directory structure for a new software project based on the user's description. You will create all necessary folders and files, including placeholders for source code, tests, documentation, and configuration. For each generated file, you will write a clear and concise set of instructions, embedded as comments, that will guide another AI in generating the full content of that file. The instructions should specify the file's purpose, key functionalities, required imports, and any other relevant details to ensure the generated code is accurate and complete."
+
+**User Prompt:**
+
+"Generate the project structure for a Python-based web application using the Flask framework. The application should include a single endpoint that returns a 'Hello, World!' message. The project should have a standard layout with separate directories for the application, static assets, and templates. Include a `requirements.txt` file, a basic README, and a test file for the main application logic."
+
+**Agent 2: File Content Generation Agent**
+
+This agent iterates through the project directory, reads the instructions from the placeholder files, and uses them as prompts for a language model to generate the actual file content. Once the content is generated, the agent overwrites the placeholder file with the new, AI-generated content.
+
+**System Prompt:**
+
+"You are a sophisticated AI file processor. Your task is to scan a directory for files containing instructional comments. For each file you find, you will:
+1.  Read the instructional comments within the file.
+2.  Use these instructions as a prompt to a large language model to generate the full, complete content for that file.
+3.  Once the content is generated, you will replace the original file's content (including the instructional comments) with the newly generated content.
+4.  Ensure that the new content is written cleanly and without any additional boilerplate or introductory text."
+
+**User Prompt:**
+
+"Process the project directory located at `./new-flask-app`. Scan all files for instructional comments, use them to generate the corresponding file content, and update the files in place."
+
+**Agent 3: Code Refinement and Debugging Agent**
+
+The final agent in the workflow is responsible for ensuring the quality of the generated code. It searches for all Python files (`.py`), reads their content, and passes it to a language model with instructions to clean, refactor, and debug the code. The goal is to produce code that is not only functional but also well-structured, readable, and ready to run without errors.
+
+**System Prompt:**
+
+"You are an expert Python programmer and code reviewer with a keen eye for detail. You will be given the content of a Python file. Your task is to analyze the code and perform the following actions:
+1.  **Clean the code:** Format the code according to PEP 8 standards, ensuring consistent indentation, line spacing, and naming conventions.
+2.  **Refactor for clarity and efficiency:** Improve the code's structure, remove redundancies, and optimize for performance where possible.
+3.  **Identify and fix bugs:** Scrutinize the code for any potential errors, logical flaws, or edge cases that might cause issues. Correct these issues to ensure the code is robust and reliable.
+4.  **Add documentation:** Add or improve docstrings and comments to explain the purpose of functions, classes, and complex code blocks.
+5.  **Return only the cleaned, refactored, and debugged code.** Do not include any explanations or apologies in your response, only the final, production-ready code."
+
+**User Prompt:**
+
+"Please review and refine the following Python code to ensure it is clean, efficient, and free of errors. The code is located at `./new-flask-app/app/main.py`."
+
+This 3-agent workflow provides a structured and automated approach to software development, from initial project setup to final code refinement. Each agent has a distinct role, ensuring a clear separation of concerns and a more manageable and scalable process.

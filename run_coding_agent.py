@@ -1,48 +1,60 @@
 import argparse
 from coding_agent import CodingAgent
 from dotenv import load_dotenv
-import os
+import json
 
-load_dotenv()
-print(os.getenv("GROQ_API_KEY"))  # Ensure the API key is loaded from .env
 def main():
-    parser = argparse.ArgumentParser(description="Run CodingAgent functions with parameters.")
-    parser.add_argument('--base_path', type=str, default='.', help='Base path for CodingAgent')
-    parser.add_argument('--read_docs', action='store_true', help='Read and summarize documentation')
-    parser.add_argument('--print_tree', nargs='?', const=True, default=False, help='Pretty print directory tree (optionally provide output file)')
-    parser.add_argument('--print_summaries', nargs='?', const=True, default=False, help='Pretty print documentation summaries (optionally provide output file)')
-    parser.add_argument('--save_summaries', type=str, help='Save documentation summaries to JSON file')
-    parser.add_argument('--create_project', type=str, help='Create a project directory at the given path')
-    parser.add_argument('--project_type', type=str, default='basic', help='Project template type')
-    parser.add_argument('--use_groq', action='store_true', help='Use Groq to generate code content')
-    parser.add_argument('--prompt', type=str, default='', help='Prompt for Groq to generate project')
+    load_dotenv()
+    parser = argparse.ArgumentParser(description="An autonomous coding agent workflow.")
+
+    parser.add_argument('--prompt', type=str, required=True, help='The initial prompt describing the project to build.')
+    parser.add_argument('--project_path', type=str, default='./new_project', help='The base path for the new project.')
+    parser.add_argument('--max_retries', type=int, default=3, help='Maximum retries for the planning and verification loop.')
 
     args = parser.parse_args()
 
-    agent = CodingAgent(args.base_path)
+    agent = CodingAgent(args.project_path)
+    
+    # --- New Autonomous Workflow ---
+    
+    current_prompt = args.prompt
+    approved_plan = None
+    
+    for i in range(args.max_retries):
+        agent.console.print(f"[bold magenta]--- Planning Attempt {i+1}/{args.max_retries} ---[/]")
+        
+        # 1. Plan the project
+        plan = agent.plan_project(current_prompt)
+        if not plan:
+            agent.console.print("[red]Failed to generate a project plan. Aborting.[/]")
+            return
 
-    if args.read_docs:
-        agent.read_package_docs()
-
-    if args.print_tree:
-        agent.generate_directory_tree()
-        if isinstance(args.print_tree, str):
-            agent.pretty_print_tree(args.print_tree)
+        # 2. Verify the plan
+        is_approved, feedback = agent.verify_project_plan(plan, args.prompt)
+        
+        if is_approved:
+            approved_plan = plan
+            agent.console.print("[bold green]--- Project Plan Approved! ---[/]")
+            break
         else:
-            agent.pretty_print_tree()
-
-    if args.print_summaries:
-        if isinstance(args.print_summaries, str):
-            agent.pretty_print_summaries(args.print_summaries)
-        else:
-            agent.pretty_print_summaries()
-
-    if args.save_summaries:
-        agent.save_summaries(args.save_summaries)
-
-    if args.create_project:
-        project_structure = agent.design_project_template(args.project_type, use_groq=True, prompt=args.prompt)
-        agent.create_project_directory(args.create_project, project_structure, use_groq=args.use_groq)
+            agent.console.print(f"[yellow]Plan rejected. Refining prompt with feedback...[/]")
+            current_prompt = f"Original prompt: '{args.prompt}'. Previous plan: {json.dumps(plan)}. Feedback: '{feedback}'. Please generate a new, improved plan based on this feedback."
+            
+    if not approved_plan:
+        agent.console.print("[red]Failed to get an approved project plan after several attempts. Aborting.[/]")
+        return
+        
+    # 3. Create the project directory and structure
+    agent.create_project_directory(args.project_path, approved_plan)
+    
+    # 4. Generate file content from instructions
+    agent.generate_file_content_from_instructions(args.project_path)
+    
+    # 5. Refine the generated Python code
+    agent.refine_python_code(args.project_path)
+    
+    agent.console.print("[bold green]--- Full Workflow Completed Successfully! ---[/]")
+    agent.console.print(f"Project created at: {args.project_path}")
 
 if __name__ == "__main__":
     main()

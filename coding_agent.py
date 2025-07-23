@@ -2,283 +2,226 @@ import os
 import ast
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from pprint import PrettyPrinter
 from groq import Groq, GroqError
 import logging
+import re
 from litellm import completion
 from dotenv import load_dotenv
 
 class CodingAgent:
     def __init__(self, base_path: str):
-        """Initialize the coding agent with a base path and optional Groq API key."""
-        # Load environment variables from .env file
+        """Initialize the coding agent with a base path."""
         load_dotenv()
-
         self.base_path = Path(base_path)
-        self.directory_tree = {}
-        self.doc_summaries = {}
         self.pp = PrettyPrinter(indent=2)
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
-        # Use provided API key or fall back to .env variable
         self.groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
         if not self.groq_client.api_key:
             self.logger.warning("No Groq API key provided or found in .env file.")
-
-        # Rich console for pretty logs
         try:
             from rich.console import Console
-            from rich.panel import Panel
-            from rich.text import Text
             self.console = Console()
         except ImportError:
             self.console = None
 
-    def read_package_docs(self, package_path: Optional[Path] = None) -> None:
-        """
-        Read Python package documentation and summarize key information.
-        Only processes .py files and READMEs for efficiency.
-        """
-        package_path = package_path or self.base_path
-        package_path = Path(package_path)
-
-        if self.console:
-            self.console.print(f"[bold cyan]Reading and summarizing documentation in:[/] {package_path}")
-
-        for root, _, files in os.walk(package_path):
-            for file in files:
-                file_path = Path(root) / file
-                if file.endswith('.py'):
-                    if self.console:
-                        self.console.print(f"[green]Summarizing Python file:[/] {file_path}")
-                    self._summarize_python_file(file_path)
-                elif file.lower() in ('readme.md', 'readme.rst', 'readme.txt'):
-                    if self.console:
-                        self.console.print(f"[yellow]Summarizing README:[/] {file_path}")
-                    self._summarize_readme(file_path)
-
-    def _summarize_python_file(self, file_path: Path) -> None:
-        """Extract and summarize docstrings from a Python file."""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                source = f.read()
-            tree = ast.parse(source)
-
-            summary = {
-                'module': file_path.stem,
-                'docstring': ast.get_docstring(tree) or "No module docstring",
-                'functions': [],
-                'classes': []
-            }
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    doc = ast.get_docstring(node) or "No docstring"
-                    summary['functions'].append({
-                        'name': node.name,
-                        'docstring': doc.split('\n')[0]
-                    })
-                elif isinstance(node, ast.ClassDef):
-                    doc = ast.get_docstring(node) or "No docstring"
-                    summary['classes'].append({
-                        'name': node.name,
-                        'docstring': doc.split('\n')[0]
-                    })
-
-            self.doc_summaries[str(file_path)] = summary
-        except (SyntaxError, UnicodeDecodeError) as e:
-            self.doc_summaries[str(file_path)] = {'error': f'Failed to parse: {e}'}
-
-    def _summarize_readme(self, file_path: Path) -> None:
-        """Summarize README content (first few lines for brevity)."""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.readlines()[:5]
-            summary = {
-                'file': file_path.name,
-                'summary': ''.join(content).strip()[:200] + '...'
-            }
-            self.doc_summaries[str(file_path)] = summary
-        except Exception as e:
-            self.doc_summaries[str(file_path)] = {'error': f'Failed to read: {e}'}
-
-    def generate_directory_tree(self, base_path: Optional[Path] = None) -> Dict:
-        """
-        Generate a directory tree for the given path and store it.
-        Returns the tree as a dictionary.
-        """
-        base_path = base_path or self.base_path
-        base_path = Path(base_path)
-        if self.console:
-            self.console.print(f"[bold cyan]Generating directory tree for:[/] {base_path}")
-        self.directory_tree = self._build_tree(base_path)
-        if self.console:
-            self.console.print(f"[green]Directory tree generated.[/]")
-        return self.directory_tree
-
-    def _build_tree(self, path: Path) -> Dict:
-        """Recursively build a directory tree."""
-        tree = {'name': path.name, 'type': 'dir', 'children': []}
-        try:
-            for item in path.iterdir():
-                if item.is_dir():
-                    tree['children'].append(self._build_tree(item))
-                else:
-                    tree['children'].append({'name': item.name, 'type': 'file'})
-        except PermissionError:
-            tree['error'] = 'Permission denied'
-        return tree
-
-    def pretty_print_tree(self, output_file: Optional[str] = None) -> None:
-        """Pretty print the directory tree to console or a file."""
-        if not self.directory_tree:
-            self.logger.warning("Directory tree is empty. Run generate_directory_tree first.")
-            return
-
-        if self.console:
-            self.console.print("[bold cyan]Pretty printing directory tree...[/]")
-        if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                print(self.pp.pformat(self.directory_tree), file=f)
-            if self.console:
-                self.console.print(f"[green]Directory tree saved to:[/] {output_file}")
-        else:
-            self.pp.pprint(self.directory_tree)
-
-    def pretty_print_summaries(self, output_file: Optional[str] = None) -> None:
-        """Pretty print the documentation summaries to console or a file."""
-        if not self.doc_summaries:
-            self.logger.warning("Documentation summaries are empty. Run read_package_docs first.")
-            return
-
-        if self.console:
-            self.console.print("[bold cyan]Pretty printing documentation summaries...[/]")
-        if output_file:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                print(self.pp.pformat(self.doc_summaries), file=f)
-            if self.console:
-                self.console.print(f"[green]Documentation summaries saved to:[/] {output_file}")
-        else:
-            self.pp.pprint(self.doc_summaries)
-
-    def save_summaries(self, output_path: str) -> None:
-        """Save documentation summaries to a JSON file."""
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(self.doc_summaries, f, indent=2)
-        if self.console:
-            self.console.print(f"[green]Summaries saved to:[/] {output_path}")
-
-    def generate_code_with_groq(self, prompt: str) -> str:
-        """
-        Generate code using the Groq API based on a user prompt.
-        Returns the generated code as a string.
-        """
+    def generate_code_with_groq(self, prompt: str, system_prompt: str) -> str:
+        """Generate code using Groq API with a dynamic system prompt."""
         try:
             response = self.groq_client.chat.completions.create(
-                model="llama3-70b-8192",  # Example model, adjust as needed
+                model="llama3-70b-8192",
                 messages=[
-                    {"role": "system", "content": "You are a Python code generator. Provide clean, well-documented ready to run Python code without further debugging."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0,
-                
+                temperature=0.1,
             )
-            content = response.choices[0].message.content
-            return content.strip() if content else ""
+            return response.choices[0].message.content.strip()
         except GroqError as e:
             self.logger.error(f"Groq API error: {e}")
             return f"# Error: Failed to generate code: {e}"
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred: {e}")
+            return f"# Error: An unexpected error occurred: {e}"
 
-    def create_project_directory(self, project_path: str, structure: Dict, use_groq: bool = False) -> None:
-        """
-        Create a project directory based on the provided structure.
-        Optionally use Groq API to generate file content.
-        """
+    def plan_project(self, prompt: str) -> Optional[Dict]:
+        """Agent: Plan Project. Creates a comprehensive blueprint for the project."""
+        if self.console:
+            self.console.print("[bold cyan]Agent: Project Planner running...[/]")
+        
+        system_prompt = (
+            "You are a master software architect. Based on the user's request, create a comprehensive project blueprint. "
+            "The blueprint must be a single, clean JSON object, without any surrounding text or markdown. "
+            "It must contain two keys: 'readme_content' and 'project_structure'. "
+            "The 'readme_content' value must be a single string with properly escaped newlines () to be valid JSON. "
+            "The 'project_structure' value should be a JSON object representing the file and directory structure, with instructional comments in each file."
+        )
+        
+        response_str = self.generate_code_with_groq(prompt, system_prompt)
+        
+        try:
+            # Enhanced JSON extraction
+            json_str = None
+            json_match = re.search(r'```json\s*([\s\S]+?)\s*```', response_str)
+            if json_match:
+                json_str = json_match.group(1).strip()
+            else:
+                start = response_str.find('{')
+                end = response_str.rfind('}') + 1
+                if start != -1 and end != -1:
+                    json_str = response_str[start:end].strip()
+
+            if not json_str:
+                 raise json.JSONDecodeError("No JSON object found in LLM response", response_str, 0)
+            
+            # The LLM should escape newlines, but as a fallback, we can do it here
+            # This is commented out as the primary fix is prompting the LLM correctly
+            # json_str = json_str.replace('', '')
+            
+            if self.console:
+                self.console.print("[green]Project blueprint generated successfully.[/]")
+            return json.loads(json_str)
+
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse project blueprint: {e} Response was: {response_str}")
+            return None
+
+    def verify_project_plan(self, plan: Dict, original_prompt: str) -> Tuple[bool, str]:
+        """Agent: Verify Project Plan. Reviews the blueprint for quality and alignment."""
+        if self.console:
+            self.console.print("[bold cyan]Agent: Project Verifier running...[/]")
+
+        system_prompt = (
+            "You are a meticulous project manager. Your task is to review the provided project blueprint. "
+            "Assess if the plan is logical, complete, and accurately reflects the user's initial request. "
+            "Respond with only 'APPROVED' if the plan is good, or 'REJECTED:' followed by your specific feedback for improvement."
+        )
+        
+        prompt = (f"Original User Request: '{original_prompt}' Generated Blueprint: {json.dumps(plan, indent=2)}")
+
+        response = self.generate_code_with_groq(prompt, system_prompt)
+        
+        if response.startswith("APPROVED"):
+            if self.console:
+                self.console.print("[green]Verification result: Plan APPROVED.[/]")
+            return True, ""
+        elif response.startswith("REJECTED:"):
+            feedback = response.replace("REJECTED:", "").strip()
+            if self.console:
+                self.console.print(f"[yellow]Verification result: Plan REJECTED. Feedback: {feedback}[/]")
+            return False, feedback
+        else:
+            if self.console:
+                self.console.print("[red]Verifier gave an invalid response. Assuming rejection.[/]")
+            return False, "The verifier provided an invalid response. Please try again."
+
+    def create_project_directory(self, project_path: str, structure: Dict) -> None:
+        """Agent: Create Project Directory. Creates the folder structure and placeholder files."""
         path_obj = Path(project_path)
         if self.console:
-            self.console.print(f"[bold cyan]Creating project directory at:[/] {project_path}")
-        path_obj.mkdir(exist_ok=True)
-        self._create_directory_structure(path_obj, structure, use_groq)
+            self.console.print(f"[bold cyan]Agent: Directory Creator running at:[/][dim] {path_obj}[/]")
+        path_obj.mkdir(exist_ok=True, parents=True)
+        # Create README.md from the plan
+        readme_content = structure.get('readme_content', '# Project Generated by AI.')
+        with open(path_obj / 'README.md', 'w', encoding='utf-8') as f:
+            f.write(readme_content)
         if self.console:
-            self.console.print(f"[green]Project directory created at:[/] {project_path}")
+            self.console.print(f"[green]Created file:[/] {path_obj / 'README.md'}")
+        # Create the rest of the structure
+        project_structure = structure.get('project_structure', {})
+        if project_structure:
+            self._create_directory_structure(path_obj, self._transform_structure(project_structure))
 
-    def _create_directory_structure(self, base_path: Path, structure: Dict, use_groq: bool) -> None:
-        """Recursively create directories and files from the structure."""
-        for item in structure.get('children', []):
+    def _create_directory_structure(self, base_path: Path, children: List[Dict]) -> None:
+        """Recursively create directories and files."""
+        for item in children:
             item_path = base_path / item['name']
             if item['type'] == 'dir':
-                if self.console:
-                    self.console.print(f"[cyan]Creating directory:[/] {item_path}")
                 item_path.mkdir(exist_ok=True)
-                self._create_directory_structure(item_path, item, use_groq)
+                if self.console:
+                    self.console.print(f"[cyan]Created directory:[/][dim] {item_path}[/]")
+                self._create_directory_structure(item_path, item.get('children', []))
             elif item['type'] == 'file':
-                content = item.get('content', '')
-                if use_groq and not content:  # Generate content with Groq if not provided
-                    prompt = f"Generate a Python file named {item['name']} for a {structure['name']} project."
-                    if self.console:
-                        self.console.print(f"[yellow]Generating content for file:[/] {item_path}")
-                    content = self.generate_code_with_groq(prompt)
                 with open(item_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                    f.write(item.get('content', ''))
                 if self.console:
-                    self.console.print(f"[green]Created file:[/] {item_path}")
+                    self.console.print(f"[green]Created file:[/][dim] {item_path}[/]")
 
-    def design_project_template(self, project_type: str = 'basic', use_groq: bool = True, prompt: str = '') -> Dict:
-        """
-        Design a project directory structure based on a template type.
-        If use_groq is True, use the LLM to generate a detailed project template from a prompt.
-        Otherwise, use a static template.
-        """
-        logging.info(prompt)
-        if use_groq:
-            if not prompt:
-                prompt = (
-                    f"Design a detailed Python project directory structure for a '{project_type}' project. "
-                    "Return the structure as a JSON object with keys: 'name' (project root), 'children' (list of files and folders), "
-                    "where each child is a dict with 'name', 'type' ('file' or 'dir'), and for directories, a 'children' list. "
-                    "For files, optionally include a 'content' key with a short code or description. "
-                    "Example: {\"name\": \"project\", \"children\": [{\"name\": \"src\", ...}]}"
-                )
-            if self.console:
-                self.console.print(f"[bold cyan]Requesting LLM to design a project template for type:[/] {project_type}")
-            try:
-                response = self.generate_code_with_groq(prompt)
-                print(response)
-                import json as _json
-                # Try to extract the first JSON object from the response
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                if start != -1 and end != -1:
-                    json_str = response[start:end]
-                    if self.console:
-                        self.console.print("[green]LLM project template received and parsed.[/]")
-                    return _json.loads(json_str)
-                # fallback: try to parse the whole response
-                if self.console:
-                    self.console.print("[yellow]Trying to parse full LLM response as JSON...[/]")
-                return _json.loads(response)
-            except Exception as e:
-                if self.console:
-                    self.console.print(f"[red]Failed to parse LLM project template: {e}[/]")
-                self.logger.error(f"Failed to parse LLM project template: {e}")
-                # fallback to static template
-        templates = {
-            'basic': {
-                'name': 'project',
-                'children': [
-                    {'name': 'src', 'type': 'dir', 'children': [
-                        {'name': '__init__.py', 'type': 'file', 'content': '# Package init'},
-                        {'name': 'main.py', 'type': 'file', 'content': 'def main():\n    pass\n\nif __name__ == "__main__":\n    main()'}
-                    ]},
-                    {'name': 'tests', 'type': 'dir', 'children': [
-                        {'name': '__init__.py', 'type': 'file', 'content': ''},
-                        {'name': 'test_main.py', 'type': 'file', 'content': 'import pytest\n'}
-                    ]},
-                    {'name': 'README.md', 'type': 'file', 'content': '# Project\nA basic Python project.'},
-                    {'name': 'requirements.txt', 'type': 'file', 'content': ''}
-                ]
-            }
-        }
-        return templates.get(project_type, templates['basic'])
+    def _transform_structure(self, structure: Dict) -> List[Dict]:
+        """Transforms the dictionary-based structure into a list-based one for recursion."""
+        transformed_list = []
+        for name, content in structure.items():
+            if isinstance(content, dict):
+                transformed_list.append({
+                    'name': name,
+                    'type': 'dir',
+                    'children': self._transform_structure(content)
+                })
+            else:
+                transformed_list.append({
+                    'name': name,
+                    'type': 'file',
+                    'content': content
+                })
+        return transformed_list
+
+    def generate_file_content_from_instructions(self, project_path: str) -> None:
+        """Agent: Generate File Content. Populates files based on instructional comments."""
+        if self.console:
+            self.console.print(f"[bold cyan]Agent: Content Generator running for project at:[/][dim] {project_path}[/]")
+        
+        system_prompt = (
+            "You are a sophisticated AI file processor. Based on the instructional comments provided, generate the full, complete content for the file. "
+            "Return only the raw code or text for the file, without any surrounding text, explanations, or markdown."
+        )
+
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                # Skip README, as it's already generated
+                if file.lower() == 'readme.md':
+                    continue
+                file_path = Path(root) / file
+                with open(file_path, 'r+', encoding='utf-8') as f:
+                    instructions = f.read()
+                    if instructions.strip().startswith('#'):
+                        if self.console:
+                            self.console.print(f"[yellow]Generating content for:[/][dim] {file_path}[/]")
+                        
+                        generated_content = self.generate_code_with_groq(instructions, system_prompt)
+                        f.seek(0)
+                        f.write(generated_content)
+                        f.truncate()
+                        if self.console:
+                            self.console.print(f"[green]Successfully updated:[/][dim] {file_path}[/]")
+
+    def refine_python_code(self, project_path: str) -> None:
+        """Agent: Refine and Debug Code. Cleans, refactors, and debugs Python files."""
+        system_prompt = (
+            "You are a sophisticated AI file processor. Based on the instructional comments provided, generate the full, complete content for the file. "
+            "Return only the raw code or text for the file, without any surrounding text, explanations, or markdown."
+        )
+
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                # Skip README, as it's already generated
+                if file.endswith('.py'):
+                    file_path = Path(root) / file
+                    with open(file_path, 'r+', encoding='utf-8') as f:
+                        original_code = f.read()
+                    if not original_code.strip(): # Skip empty files
+                        if self.console:
+                            self.console.print(f"[dim]Skipping empty file:[/][dim] {file_path}[/]")
+                            continue
+                        
+                        if self.console:
+                            self.console.print(f"[yellow]Refining code in:[/][dim] {file_path}[/]")
+                        
+                        refined_code = self.generate_code_with_groq(original_code, system_prompt)
+                        f.seek(0)
+                        f.write(generated_content)
+                        f.truncate()
+                        if self.console:
+                            self.console.print(f"[green]Successfully updated:[/] {file_path}")
 
