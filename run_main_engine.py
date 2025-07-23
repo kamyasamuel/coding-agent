@@ -1,5 +1,5 @@
 import argparse
-from coding_agent import CodingAgent
+from main_engine import CodingAgent
 from dotenv import load_dotenv
 import json
 
@@ -10,10 +10,10 @@ def main():
     parser.add_argument('--prompt', type=str, required=True, help='The initial prompt describing the project to build.')
     parser.add_argument('--project_path', type=str, default='./new_project', help='The base path for the new project.')
     parser.add_argument('--max_retries', type=int, default=3, help='Maximum retries for the planning and verification loop.')
-    parser.add_argument('--run_with', type=str, default='groq', help='The provider to use for inference (e.g., openai, ollama).')
+    parser.add_argument('--provider', type=str, default='groq', help='The provider to use for inference (e.g., groq, gemini).')
     args = parser.parse_args()
 
-    agent = CodingAgent(args.project_path)
+    agent = CodingAgent(args.project_path, provider=args.provider)
     
     # --- New Autonomous Workflow ---
     
