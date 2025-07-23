@@ -11,13 +11,14 @@ from litellm import completion
 from dotenv import load_dotenv
 
 class CodingAgent:
-    def __init__(self, base_path: str):
+    def __init__(self, base_path: str, provider: str = 'groq'):
         """Initialize the coding agent with a base path."""
         load_dotenv()
         self.base_path = Path(base_path)
         self.pp = PrettyPrinter(indent=2)
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
+        self.provider = provider
         self.groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
         if not self.groq_client.api_key:
             self.logger.warning("No Groq API key provided or found in .env file.")
@@ -26,6 +27,34 @@ class CodingAgent:
             self.console = Console()
         except ImportError:
             self.console = None
+
+    def generate_code(self, prompt: str, system_prompt: str) -> str:
+        """Generate code using the specified provider."""
+        if self.provider == 'groq':
+            return self.generate_code_with_groq(prompt, system_prompt)
+        else:
+            return self.generate_code_with_litellm(prompt, system_prompt)
+
+    def generate_code_with_litellm(self, prompt: str, system_prompt: str) -> str:
+        """Generate code using LiteLLM with a dynamic system prompt."""
+        try:
+            model_name = ""
+            if self.provider == "gemini":   model_name = "gemini/gemini-2.5-pro"
+            if self.provider == "groq": model_name = "groq/llama3-70b-8192"
+            if self.provider == "openai":   model_name = "openai/gpt-4o-mini"
+            else:   model_name = "ollama/granite3.3:2b"
+            response = completion(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            self.logger.error(f"LiteLLM API error: {e}")
+            return f"# Error: Failed to generate code: {e}"
 
     def generate_code_with_groq(self, prompt: str, system_prompt: str) -> str:
         """Generate code using Groq API with a dynamic system prompt."""
@@ -59,7 +88,7 @@ class CodingAgent:
             "The 'project_structure' value should be a JSON object representing the file and directory structure, with instructional comments in each file."
         )
         
-        response_str = self.generate_code_with_groq(prompt, system_prompt)
+        response_str = self.generate_code(prompt, system_prompt)
         
         try:
             # Enhanced JSON extraction
@@ -75,10 +104,6 @@ class CodingAgent:
 
             if not json_str:
                  raise json.JSONDecodeError("No JSON object found in LLM response", response_str, 0)
-            
-            # The LLM should escape newlines, but as a fallback, we can do it here
-            # This is commented out as the primary fix is prompting the LLM correctly
-            # json_str = json_str.replace('', '')
             
             if self.console:
                 self.console.print("[green]Project blueprint generated successfully.[/]")
@@ -101,7 +126,7 @@ class CodingAgent:
         
         prompt = (f"Original User Request: '{original_prompt}' Generated Blueprint: {json.dumps(plan, indent=2)}")
 
-        response = self.generate_code_with_groq(prompt, system_prompt)
+        response = self.generate_code(prompt, system_prompt)
         
         if response.startswith("APPROVED"):
             if self.console:
@@ -140,10 +165,14 @@ class CodingAgent:
             item_path = base_path / item['name']
             if item['type'] == 'dir':
                 item_path.mkdir(exist_ok=True)
-                if self.console:
-                    self.console.print(f"[cyan]Created directory:[/][dim] {item_path}[/]")
                 self._create_directory_structure(item_path, item.get('children', []))
             elif item['type'] == 'file':
+                with open(item_path, 'w', encoding='utf-8') as f:
+                    f.write(item.get('content', ''))
+                if self.console:
+                    self.console.print(f"[cyan]Created file:[/][dim] {item_path}[/]")
+                self._create_directory_structure(item_path, item.get('children', []))
+            elif item_path.is_file():
                 with open(item_path, 'w', encoding='utf-8') as f:
                     f.write(item.get('content', ''))
                 if self.console:
@@ -189,7 +218,7 @@ class CodingAgent:
                         if self.console:
                             self.console.print(f"[yellow]Generating content for:[/][dim] {file_path}[/]")
                         
-                        generated_content = self.generate_code_with_groq(instructions, system_prompt)
+                        generated_content = self.generate_code(instructions, system_prompt)
                         f.seek(0)
                         f.write(generated_content)
                         f.truncate()
@@ -202,7 +231,6 @@ class CodingAgent:
             "You are a sophisticated AI file processor. Based on the instructional comments provided, generate the full, complete content for the file. "
             "Return only the raw code or text for the file, without any surrounding text, explanations, or markdown."
         )
-
         for root, _, files in os.walk(project_path):
             for file in files:
                 # Skip README, as it's already generated
@@ -210,18 +238,19 @@ class CodingAgent:
                     file_path = Path(root) / file
                     with open(file_path, 'r+', encoding='utf-8') as f:
                         original_code = f.read()
-                    if not original_code.strip(): # Skip empty files
-                        if self.console:
-                            self.console.print(f"[dim]Skipping empty file:[/][dim] {file_path}[/]")
-                            continue
-                        
+
+                        if not original_code.strip(): # Skip empty files
+                            if self.console:
+                                self.console.print(f"[dim]Skipping empty file:[/][dim] {file_path}[/]")
+                                continue
+                            
                         if self.console:
                             self.console.print(f"[yellow]Refining code in:[/][dim] {file_path}[/]")
                         
-                        refined_code = self.generate_code_with_groq(original_code, system_prompt)
+                        refined_code = self.generate_code(original_code, system_prompt)
+                        
                         f.seek(0)
-                        f.write(generated_content)
+                        f.write(refined_code)
                         f.truncate()
                         if self.console:
                             self.console.print(f"[green]Successfully updated:[/] {file_path}")
-
