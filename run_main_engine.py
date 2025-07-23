@@ -10,7 +10,7 @@ def main():
     parser.add_argument('--prompt', type=str, required=True, help='The initial prompt describing the project to build.')
     parser.add_argument('--project_path', type=str, default='./new_project', help='The base path for the new project.')
     parser.add_argument('--max_retries', type=int, default=3, help='Maximum retries for the planning and verification loop.')
-
+    parser.add_argument('--run_with', type=str, default='groq', help='The provider to use for inference (e.g., openai, ollama).')
     args = parser.parse_args()
 
     agent = CodingAgent(args.project_path)
