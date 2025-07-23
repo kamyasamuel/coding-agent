@@ -168,3 +168,8 @@ The final agent in the workflow is responsible for ensuring the quality of the g
 "Please review and refine the following Python code to ensure it is clean, efficient, and free of errors. The code is located at `./new-flask-app/app/main.py`."
 
 This 3-agent workflow provides a structured and automated approach to software development, from initial project setup to final code refinement. Each agent has a distinct role, ensuring a clear separation of concerns and a more manageable and scalable process.
+
+**Included Example**
+- network_security_app
+# Created with this command
+# python run_coding_agent.py --project_path ./network_security_app  --prompt 'create a python network security project'
