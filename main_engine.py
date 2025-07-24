@@ -51,7 +51,7 @@ class CodingAgent:
                 ],
                 temperature=0.1,
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip() # type: ignore
         except Exception as e:
             self.logger.error(f"LiteLLM API error: {e}")
             return f"# Error: Failed to generate code: {e}"
@@ -67,7 +67,7 @@ class CodingAgent:
                 ],
                 temperature=0.1,
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip() # type: ignore
         except GroqError as e:
             self.logger.error(f"Groq API error: {e}")
             return f"# Error: Failed to generate code: {e}"

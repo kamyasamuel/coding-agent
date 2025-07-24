@@ -21,12 +21,12 @@ def main():
     approved_plan = None
     
     for i in range(args.max_retries):
-        agent.console.print(f"[bold magenta]--- Planning Attempt {i+1}/{args.max_retries} ---[/]")
+        agent.console.print(f"[bold magenta]--- Planning Attempt {i+1}/{args.max_retries} ---[/]") # type: ignore
         
         # 1. Plan the project
         plan = agent.plan_project(current_prompt)
         if not plan:
-            agent.console.print("[red]Failed to generate a project plan. Aborting.[/]")
+            agent.console.print("[red]Failed to generate a project plan. Aborting.[/]") # type: ignore
             return
 
         # 2. Verify the plan
@@ -34,14 +34,14 @@ def main():
         
         if is_approved:
             approved_plan = plan
-            agent.console.print("[bold green]--- Project Plan Approved! ---[/]")
+            agent.console.print("[bold green]--- Project Plan Approved! ---[/]") # type: ignore
             break
         else:
-            agent.console.print(f"[yellow]Plan rejected. Refining prompt with feedback...[/]")
+            agent.console.print(f"[yellow]Plan rejected. Refining prompt with feedback...[/]") # type: ignore
             current_prompt = f"Original prompt: '{args.prompt}'. Previous plan: {json.dumps(plan)}. Feedback: '{feedback}'. Please generate a new, improved plan based on this feedback."
             
     if not approved_plan:
-        agent.console.print("[red]Failed to get an approved project plan after several attempts. Aborting.[/]")
+        agent.console.print("[red]Failed to get an approved project plan after several attempts. Aborting.[/]") # type: ignore
         return
         
     # 3. Create the project directory and structure
@@ -53,8 +53,8 @@ def main():
     # 5. Refine the generated Python code
     agent.refine_python_code(args.project_path)
     
-    agent.console.print("[bold green]--- Full Workflow Completed Successfully! ---[/]")
-    agent.console.print(f"Project created at: {args.project_path}")
+    agent.console.print("[bold green]--- Full Workflow Completed Successfully! ---[/]") # type: ignore
+    agent.console.print(f"Project created at: {args.project_path}") # type: ignore
 
 if __name__ == "__main__":
     main()
