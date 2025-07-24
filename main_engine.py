@@ -7,6 +7,7 @@ from pprint import PrettyPrinter
 from groq import Groq, GroqError
 import logging
 import re
+import litellm
 from litellm import completion
 from dotenv import load_dotenv
 
@@ -28,21 +29,21 @@ class CodingAgent:
         except ImportError:
             self.console = None
 
-    def generate_code(self, prompt: str, system_prompt: str) -> str:
+    def generate_code(self, prompt: str, system_prompt: str, response_format: Optional[str] = None) -> str:
         """Generate code using the specified provider."""
         if self.provider == 'groq':
-            return self.generate_code_with_groq(prompt, system_prompt)
+            return self.generate_code_with_groq(prompt, system_prompt, response_format)
         else:
-            return self.generate_code_with_litellm(prompt, system_prompt)
+            return self.generate_code_with_litellm(prompt, system_prompt, response_format)
 
-    def generate_code_with_litellm(self, prompt: str, system_prompt: str) -> str:
+    def generate_code_with_litellm(self, prompt: str, system_prompt: str, response_format: Optional[str] = None) -> str:
         """Generate code using LiteLLM with a dynamic system prompt."""
         try:
             model_name = ""
             if self.provider == "gemini":   model_name = "gemini/gemini-2.5-pro"
-            if self.provider == "groq": model_name = "groq/llama3-70b-8192"
-            if self.provider == "openai":   model_name = "openai/gpt-4o-mini"
-            else:   model_name = "ollama/granite3.3:2b"
+            elif self.provider == "groq": model_name = "groq/llama3-70b-8192"
+            elif self.provider == "openai":   model_name = "openai/gpt-4o-mini"
+            elif self.provider == "ollama":   model_name = "ollama/granite3.1-moe:3b"
             response = completion(
                 model=model_name,
                 messages=[
@@ -50,13 +51,14 @@ class CodingAgent:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
+                response_format= {"type": "json_object"} if response_format == "json" else None,
             )
             return response.choices[0].message.content.strip() # type: ignore
         except Exception as e:
             self.logger.error(f"LiteLLM API error: {e}")
             return f"# Error: Failed to generate code: {e}"
 
-    def generate_code_with_groq(self, prompt: str, system_prompt: str) -> str:
+    def generate_code_with_groq(self, prompt: str, system_prompt: str, response_format: Optional[str] = None) -> str:
         """Generate code using Groq API with a dynamic system prompt."""
         try:
             response = self.groq_client.chat.completions.create(
@@ -66,6 +68,7 @@ class CodingAgent:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
+                response_format= {"type": "json_object"} if response_format == "json" else None,
             )
             return response.choices[0].message.content.strip() # type: ignore
         except GroqError as e:
@@ -87,9 +90,10 @@ class CodingAgent:
             "The 'readme_content' value must be a single string with properly escaped newlines () to be valid JSON. "
             "The 'project_structure' value should be a JSON object representing the file and directory structure, with instructional comments in each file."
         )
-        
-        response_str = self.generate_code(prompt, system_prompt)
-        
+
+        response_format = "json"
+        response_str = self.generate_code(prompt, system_prompt, response_format)
+
         try:
             # Enhanced JSON extraction
             json_str = None
@@ -126,8 +130,8 @@ class CodingAgent:
         
         prompt = (f"Original User Request: '{original_prompt}' Generated Blueprint: {json.dumps(plan, indent=2)}")
 
-        response = self.generate_code(prompt, system_prompt)
-        
+        response = self.generate_code(prompt, system_prompt, response_format=None)
+
         if response.startswith("APPROVED"):
             if self.console:
                 self.console.print("[green]Verification result: Plan APPROVED.[/]")
@@ -217,8 +221,8 @@ class CodingAgent:
                     if instructions.strip().startswith('#'):
                         if self.console:
                             self.console.print(f"[yellow]Generating content for:[/][dim] {file_path}[/]")
-                        
-                        generated_content = self.generate_code(instructions, system_prompt)
+
+                        generated_content = self.generate_code(instructions, system_prompt, response_format=None)
                         f.seek(0)
                         f.write(generated_content)
                         f.truncate()
@@ -246,9 +250,9 @@ class CodingAgent:
                             
                         if self.console:
                             self.console.print(f"[yellow]Refining code in:[/][dim] {file_path}[/]")
-                        
-                        refined_code = self.generate_code(original_code, system_prompt)
-                        
+
+                        refined_code = self.generate_code(original_code, system_prompt, response_format=None)
+
                         f.seek(0)
                         f.write(refined_code)
                         f.truncate()

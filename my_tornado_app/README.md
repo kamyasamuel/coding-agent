@@ -1,1 +1,6 @@
-## Simple Tornado Webserver Application\n\nThis project is a simple web server built using the Tornado framework. It serves static content and provides a basic API endpoint.\n\n### Requirements\n- Python 3.x\n- Tornado library\n\n### Installation\n1. Clone the repository: `git clone <repository-url>`\n2. Navigate to the project directory: `cd tornado-webserver`\n3. Install the required packages: `pip install -r requirements.txt`\n\n### Running the Server\nTo start the server, run the following command: `python app.py`\n\nThe server will be accessible at `http://localhost:8888`.\n\n### API Endpoints\n- `GET /api/hello`: Returns a greeting message.\n\n### License\nThis project is licensed under the MIT License.
+Tornado Web Server Application
+=============================
+
+This is a simple Tornado web server application. It includes a main application file, a handlers directory for request handlers, a models directory for data models, a templates directory for HTML templates, and a static directory for static assets.
+
+To run the application, navigate to the project root and execute `python app.py`. Open a web browser and navigate to `http://localhost:8888` to access the application.
